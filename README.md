@@ -28,11 +28,7 @@ Updates install automatically through your userscript manager.
 
 ### Torn PDA (mobile)
 
-1. In Torn PDA, open **Settings → Advanced browser settings → User scripts**.
-2. Add a new script and paste in the contents of `torn-chat-quick-reply.user.js`.
-3. Set injection time to **End**, save.
-
-Note: Shift+click needs a keyboard, so this feature is mainly useful with a Bluetooth keyboard on PDA. On a touch-only device, a plain click still opens the profile as usual.
+TBA
 
 ## Is it allowed?
 
