@@ -331,11 +331,16 @@ const PAGE_HTML = `<!doctype html><html><body>
   let requests = 0;
   p.on('request', (req) => { if (req.url().includes('profiles.php')) requests++; });
 
+  // Mirrors the script's own QUOTE_REPLY_INDENT + QUOTE_REPLY_ARROW: an
+  // indented "↪" marking where the actual reply starts, always this arrow
+  // regardless of the @/↪ mention-style toggle.
+  const REPLY_PROMPT = '    ' + '↪' + '  ';
+
   // --- shift+click on the message text (not the name) quotes the whole message ---
   await p.locator('#global span.message___AI7N1').click({ modifiers: ['Shift'] });
   const quoted1 = await p.locator('#global textarea').inputValue();
-  ok('shift+click on message text inserts a quote block with the bold name, the message in brackets, then a blank line',
-    quoted1 === '↪ ' + toBold('masky') + '\n[hello]\n\n');
+  ok('shift+click on message text inserts a quote block with the bold name, the message in brackets, then an indented reply arrow',
+    quoted1 === '↪ ' + toBold('masky') + '\n[hello]\n\n' + REPLY_PROMPT);
   ok('quoting a message never navigated to the profile', requests === 0);
   ok('a "Replying to Name" chip also appears from quoting', (await p.locator('#global .tcqr-chip').count()) === 1);
 
@@ -344,7 +349,8 @@ const PAGE_HTML = `<!doctype html><html><body>
   await p.click('#global .tcqr-style-toggle');
   await p.locator('#global span.message___AI7N1').click({ modifiers: ['Shift'] });
   const quoted2 = await p.locator('#global textarea').inputValue();
-  ok('quoting with "@Name" style selected uses "@Name" instead of the arrow', quoted2 === '@' + toBold('masky') + '\n[hello]\n\n');
+  ok('quoting with "@Name" style selected uses "@Name" in the header but still "↪" for the reply arrow',
+    quoted2 === '@' + toBold('masky') + '\n[hello]\n\n' + REPLY_PROMPT);
   await p.click('#global .tcqr-style-toggle'); // back to the default for the rest of this block
 
   // --- shift+clicking the avatar still does nothing (not a mention, not a quote) ---
@@ -363,6 +369,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   const quoted3 = await p.locator('#global textarea').inputValue();
   const expectedTruncated = '[' + 'x'.repeat(120) + '…]';
   ok('a long message is truncated to ~120 characters in the quote, with an ellipsis', quoted3.includes(expectedTruncated));
+  ok('the reply arrow still follows a truncated quote', quoted3.endsWith(REPLY_PROMPT));
 
   // --- press-and-hold on the message text (touch) quotes it too, same as shift+click ---
   await p.evaluate(() => {
@@ -379,7 +386,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   }, { x, y });
   await p.waitForTimeout(500);
   const quoted4 = await p.locator('#global textarea').inputValue();
-  ok('press-and-hold on message text quotes it, same as shift+click', quoted4 === '↪ ' + toBold('masky') + '\n[hello]\n\n');
+  ok('press-and-hold on message text quotes it, same as shift+click', quoted4 === '↪ ' + toBold('masky') + '\n[hello]\n\n' + REPLY_PROMPT);
   }
 
   // ------------------------------------------------------------- default click behaviour

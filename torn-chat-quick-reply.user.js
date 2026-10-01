@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Chat Quick Reply
 // @namespace    https://github.com/rootfellen/torn-chat-quick-reply
-// @version      1.4.0
-// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, or shift+click/hold the message text itself to quote the whole message - both with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening. Names are rendered in bold-look Unicode so they stand out in the sent message for everyone, with no markdown needed.
+// @version      1.5.0
+// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, or shift+click/hold the message text itself to quote the whole message - both with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening. Names are rendered in bold-look Unicode so they stand out in the sent message for everyone, with no markdown needed, and a quote ends with an indented "↪" marking where your own reply starts.
 // @author       0o0o0
 // @license      MIT
 // @homepageURL  https://github.com/rootfellen/torn-chat-quick-reply
@@ -40,9 +40,16 @@
  * sender's name - quotes that specific message instead of just mentioning
  * them: it inserts the sender's (bold-look) name on its own line, the
  * message itself on the next line in brackets (truncated past ~120
- * characters), then a blank line to type the actual reply into, e.g.:
+ * characters), then a blank line with a small indented "↪" marking where
+ * the actual reply gets typed, e.g.:
  *   ↪ 𝐌𝐚𝐝𝐠𝐨𝐝
  *   [Follow me for more life hacks]
+ *
+ *       ↪   <cursor lands here>
+ * That trailing arrow is always "↪", regardless of the @/↪ mention-style
+ * toggle - it's a layout cue for where your own words start, not a mention -
+ * and its indent uses non-breaking spaces so it isn't collapsed away like
+ * regular spaces would be once the message is actually sent.
  *
  * Note this means Shift+click inside a chat message no longer extends a
  * text selection there the way it normally would elsewhere on the page.
@@ -245,21 +252,31 @@
     textarea.setSelectionRange(pos, pos);
   }
 
+  // A small indented "↪" marks where your own reply text starts, visually
+  // separating it from the quote above - always this arrow, regardless of
+  // the @/↪ mention-style toggle (it's a layout cue, not a mention).
+  // Regular spaces get collapsed down to one by normal HTML whitespace
+  // rules, so the indent itself uses non-breaking spaces (U+00A0) instead,
+  // which survive that collapsing and actually show up indented once sent.
+  const QUOTE_REPLY_INDENT = '\u00A0'.repeat(4);
+  const QUOTE_REPLY_ARROW = '↪';
+
   /**
    * "↪ Name" (or "@Name") on its own line, the quoted message text on the
-   * next line in brackets, then a blank line to type the actual reply into -
-   * e.g.:
+   * next line in brackets, then a blank line and an indented "↪" where the
+   * actual reply gets typed - e.g.:
    *   ↪ Madgod
    *   [Follow me for more life hacks]
    *
-   *   <cursor here>
+   *       ↪   <cursor here>
    */
   function buildQuoteBlock(name, messageText) {
     const style = getMentionStyle();
     const boldName = toBoldUnicode(name);
     const header = style === 'at' ? ('@' + boldName) : (MENTION_GLYPH[style] + ' ' + boldName);
     const quoted = '[' + truncateQuote(messageText) + ']';
-    return header + '\n' + quoted + '\n\n';
+    const replyPrompt = QUOTE_REPLY_INDENT + QUOTE_REPLY_ARROW + '  ';
+    return header + '\n' + quoted + '\n\n' + replyPrompt;
   }
 
   function insertQuote(textarea, name, messageText) {

@@ -8,16 +8,17 @@ A free userscript for [Torn](https://www.torn.com) that lets you reply to someon
 ↪ 𝗠𝗮𝗱𝗴𝗼𝗱
 [Follow me for more life hacks]
 
+    ↪   
 ```
 
-— either way, the name is written in bold-look Unicode so it stands out in the sent message for everyone, with no markdown needed. A plain click or quick tap still opens their profile, exactly like it already does — nothing about the normal click changes.
+— either way, the name is written in bold-look Unicode so it stands out in the sent message for everyone, with no markdown needed, and a quote ends with a small indented "↪" showing exactly where your own reply starts. A plain click or quick tap still opens their profile, exactly like it already does — nothing about the normal click changes.
 
 ## What it does
 
 Inside Torn's chatbox (global, faction, company — wherever it shows up):
 
 - **Shift+click a sender's name** (desktop) → `↪ 𝗡𝗮𝗺𝗲 ` is inserted at the end of that chat's message box and the box is focused, cursor at the end. The name is written in bold-look Unicode characters, so it stands out in the sent message for anyone reading — no markdown or special viewer needed, since they're genuinely different characters, not formatting (on a very old device/font this could show as blank boxes instead of letters, though that's rare on anything Torn runs on today).
-- **Shift+click the message text itself** (not the name) → quotes that whole message instead: the sender's bold-look name on its own line, the message in brackets on the next line (trimmed to around 120 characters if it's long), then a blank line to type your reply into. Note this means Shift+click inside a chat message no longer extends a text selection there the way it normally would elsewhere on the page.
+- **Shift+click the message text itself** (not the name) → quotes that whole message instead: the sender's bold-look name on its own line, the message in brackets on the next line (trimmed to around 120 characters if it's long), then a small indented `↪` showing exactly where to type your own reply. That trailing arrow is always `↪`, even with the `@Name` style selected — it's just a layout cue, not a mention. Note this means Shift+click inside a chat message no longer extends a text selection there the way it normally would elsewhere on the page.
 - **Press and hold a sender's name or their message** (touch devices, Torn PDA) does the same two things — there's no Shift key on a touchscreen, so a brief hold is the equivalent gesture. A quick tap still opens the profile.
 - A small **"Replying to Name" chip** appears above the message box so it's obvious a reply is queued up. Shift+click or hold more names before sending and they're all added to the same chip. The chip also has a small **style toggle** to switch new mentions between `↪ Name` and `@Name` — your choice is remembered next time. Click the chip's ✕ to dismiss it, or just send your message — it clears itself the moment you actually send.
 - **Plain click/tap** on a name still opens their profile, same as today. This script only adds the reply gesture; it never removes or changes the existing one.

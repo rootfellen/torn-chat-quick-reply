@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0 (2026-09-30)
+
+- A quote now ends with a small indented "↪" marking exactly where your own reply starts, instead of just a blank line, e.g.:
+  ```
+  ↪ 𝐌𝐚𝐝𝐠𝐨𝐝
+  [Follow me for more life hacks]
+
+      ↪   <type your reply here>
+  ```
+- That arrow is always "↪", even if you've toggled the mention style to "@Name" - it's a layout cue, not a mention. The indent uses non-breaking spaces so it isn't collapsed away in the sent message the way repeated regular spaces would be.
+- Test suite grown to 43 browser tests.
+
 ## 1.4.0 (2026-09-30)
 
 - Shift+click (or press-and-hold) on a message's *text*, instead of the sender's name, now quotes that whole message - inserts the sender's (bold-look) name on its own line, the message itself on the next line in brackets (truncated past ~120 characters), then a blank line to type your reply into, e.g.:
