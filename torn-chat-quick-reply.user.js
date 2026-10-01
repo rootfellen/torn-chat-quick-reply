@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Chat Quick Reply
 // @namespace    https://github.com/rootfellen/torn-chat-quick-reply
-// @version      1.3.0
-// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening. The name itself is rendered in bold-look Unicode so it stands out in the sent message for everyone, with no markdown needed.
+// @version      1.4.0
+// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, or shift+click/hold the message text itself to quote the whole message - both with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening. Names are rendered in bold-look Unicode so they stand out in the sent message for everyone, with no markdown needed.
 // @author       0o0o0
 // @license      MIT
 // @homepageURL  https://github.com/rootfellen/torn-chat-quick-reply
@@ -35,6 +35,17 @@
  * characters that look bold (e.g. "↪ 𝐆𝐢𝐧𝐑𝐮𝐦𝐦𝐲 ") so it stands out in the
  * sent message for anyone reading, even without this script - it's just
  * plain text, no markdown or formatting support required.
+ *
+ * Shift+click (or press-and-hold) on a message's *text* - instead of the
+ * sender's name - quotes that specific message instead of just mentioning
+ * them: it inserts the sender's (bold-look) name on its own line, the
+ * message itself on the next line in brackets (truncated past ~120
+ * characters), then a blank line to type the actual reply into, e.g.:
+ *   ↪ 𝐌𝐚𝐝𝐠𝐨𝐝
+ *   [Follow me for more life hacks]
+ *
+ * Note this means Shift+click inside a chat message no longer extends a
+ * text selection there the way it normally would elsewhere on the page.
  *
  * It never reads anything outside the chatbox, never makes a network
  * request, and never submits or sends anything - it only ever fills in the
@@ -115,6 +126,56 @@
     return root ? root.querySelector(TEXTAREA_SELECTOR) : null;
   }
 
+  const QUOTE_MAX_CHARS = 120;
+
+  /**
+   * A message's sender name and its text sit inside one shared row (the
+   * "box" wrapping a "senderContainer" alongside the message body). Walking
+   * up from wherever was clicked to the nearest ancestor that *contains* a
+   * senderContainer - without depending on any particular class for the
+   * message body itself - finds that row regardless of Torn's current
+   * build-hashed class names, the same structural-matching approach used
+   * everywhere else in this script.
+   */
+  function findMessageRow(clicked) {
+    const chatRoot = clicked.closest ? clicked.closest(CHAT_ROOT_SELECTOR) : null;
+    if (!chatRoot) return null;
+    let node = clicked;
+    while (node && node !== chatRoot && node !== document.body) {
+      if (node.nodeType === 1 && node.querySelector && node.querySelector('[class*="senderContainer"]')) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  /** The first non-avatar profile link found inside a message row - the
+   * sender's own name link, searched downward from the row (the mirror of
+   * findSenderLink, which searches upward from a click on the name itself). */
+  function findSenderLinkInRow(row) {
+    const links = row.querySelectorAll('a[href*="profiles.php?XID="]');
+    for (const link of links) {
+      if (link.dataset && link.dataset.label === 'avatar') continue;
+      return link;
+    }
+    return null;
+  }
+
+  /** Everything in the row's text except the sender name/avatar area -
+   * i.e. the message itself, whatever markup Torn wraps it in. */
+  function extractMessageText(row) {
+    const clone = row.cloneNode(true);
+    const senderContainer = clone.querySelector('[class*="senderContainer"]');
+    if (senderContainer && senderContainer.parentNode) senderContainer.parentNode.removeChild(senderContainer);
+    return clone.textContent.replace(/\s+/g, ' ').trim();
+  }
+
+  function truncateQuote(text) {
+    if (text.length <= QUOTE_MAX_CHARS) return text;
+    return text.slice(0, QUOTE_MAX_CHARS).trimEnd() + '…';
+  }
+
   // ------------------------------------------------------------ mention style
   const STYLE_STORAGE_KEY = 'tcqr_mention_style';
   const DEFAULT_MENTION_STYLE = 'arrow';
@@ -178,6 +239,33 @@
     const needsSpace = current.length > 0 && !/\s$/.test(current);
     const mention = (needsSpace ? ' ' : '') + formatMention(name);
     const next = current + mention;
+    setTextareaValue(textarea, next);
+    textarea.focus();
+    const pos = next.length;
+    textarea.setSelectionRange(pos, pos);
+  }
+
+  /**
+   * "↪ Name" (or "@Name") on its own line, the quoted message text on the
+   * next line in brackets, then a blank line to type the actual reply into -
+   * e.g.:
+   *   ↪ Madgod
+   *   [Follow me for more life hacks]
+   *
+   *   <cursor here>
+   */
+  function buildQuoteBlock(name, messageText) {
+    const style = getMentionStyle();
+    const boldName = toBoldUnicode(name);
+    const header = style === 'at' ? ('@' + boldName) : (MENTION_GLYPH[style] + ' ' + boldName);
+    const quoted = '[' + truncateQuote(messageText) + ']';
+    return header + '\n' + quoted + '\n\n';
+  }
+
+  function insertQuote(textarea, name, messageText) {
+    const current = textarea.value || '';
+    const sep = current.length > 0 && !/\n$/.test(current) ? '\n' : '';
+    const next = current + sep + buildQuoteBlock(name, messageText);
     setTextareaValue(textarea, next);
     textarea.focus();
     const pos = next.length;
@@ -310,6 +398,26 @@
     return true;
   }
 
+  /**
+   * Shift+click (or long-press) on a message's *text*, rather than on the
+   * sender's name itself, quotes that whole message instead of just
+   * mentioning them. Shares the same textarea lookup and "Replying to..."
+   * chip as a plain mention.
+   */
+  function triggerQuote(row) {
+    const textarea = findChannelTextarea(row);
+    if (!textarea) return false;
+    const link = findSenderLinkInRow(row);
+    if (!link) return false;
+    const name = extractName(link.textContent);
+    if (!name) return false;
+    const messageText = extractMessageText(row);
+    if (!messageText) return false;
+    insertQuote(textarea, name, messageText);
+    showReplyChip(textarea, name);
+    return true;
+  }
+
   window.addEventListener('click', (e) => {
     // Swallow the "ghost" click that follows a successful long-press on
     // touch, so it doesn't also navigate to the profile right afterward.
@@ -324,10 +432,26 @@
     const chatRoot = e.target.closest ? e.target.closest(CHAT_ROOT_SELECTOR) : null;
     if (!chatRoot) return;
 
-    const link = findSenderLink(e.target);
-    if (!link) return;
+    // The avatar picture is its own link, right next to the name, but it
+    // was never part of either gesture - leave it doing nothing, same as
+    // before quoting existed, rather than falling through to a quote.
+    if (e.target.closest && e.target.closest('a[data-label="avatar"]')) return;
 
-    if (triggerReply(link)) {
+    const link = findSenderLink(e.target);
+    if (link) {
+      if (triggerReply(link)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
+
+    // Shift+click somewhere in the message itself (not the name) quotes
+    // the whole message instead of just mentioning the sender. Note: this
+    // also means Shift+click inside a chat message no longer extends a
+    // text selection the way it would elsewhere on the page.
+    const row = findMessageRow(e.target);
+    if (row && triggerQuote(row)) {
       e.preventDefault();
       e.stopPropagation();
     }
@@ -340,41 +464,56 @@
   const LONG_PRESS_MS = 450;
   const MOVE_CANCEL_PX = 12;
   let pressTimer = null;
-  let pressLink = null;
+  let pressTarget = null;
   let pressStart = null;
   let suppressNextClickOn = null;
 
   function cancelPress() {
     if (pressTimer) clearTimeout(pressTimer);
     pressTimer = null;
-    pressLink = null;
+    pressTarget = null;
     pressStart = null;
   }
 
   window.addEventListener('touchstart', (e) => {
     const chatRoot = e.target.closest ? e.target.closest(CHAT_ROOT_SELECTOR) : null;
-    if (!chatRoot) return;
-    const link = findSenderLink(e.target);
-    if (!link || !e.touches || !e.touches[0]) return;
+    if (!chatRoot || !e.touches || !e.touches[0]) return;
+    if (e.target.closest && e.target.closest('a[data-label="avatar"]')) return;
 
-    // Suppresses the native text-selection/callout menu a long press on a
-    // link normally brings up, without touching anything else about it.
-    if (!link.dataset.tcqrTouchReady) {
-      link.dataset.tcqrTouchReady = '1';
-      link.style.webkitTouchCallout = 'none';
-      link.style.webkitUserSelect = 'none';
-      link.style.userSelect = 'none';
+    const link = findSenderLink(e.target);
+    if (link) {
+      // Suppresses the native text-selection/callout menu a long press on a
+      // link normally brings up, without touching anything else about it.
+      if (!link.dataset.tcqrTouchReady) {
+        link.dataset.tcqrTouchReady = '1';
+        link.style.webkitTouchCallout = 'none';
+        link.style.webkitUserSelect = 'none';
+        link.style.userSelect = 'none';
+      }
+      pressTarget = link;
+      pressStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      pressTimer = setTimeout(() => {
+        const target = pressTarget;
+        cancelPress();
+        if (target && triggerReply(target)) {
+          suppressNextClickOn = target;
+          target.classList.add('tcqr-pressed');
+          setTimeout(() => target.classList.remove('tcqr-pressed'), 180);
+        }
+      }, LONG_PRESS_MS);
+      return;
     }
 
-    pressLink = link;
+    // Press-and-hold on the message text itself (not the name) quotes the
+    // whole message, same as Shift+click does on desktop.
+    const row = findMessageRow(e.target);
+    if (!row) return;
+    pressTarget = row;
     pressStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     pressTimer = setTimeout(() => {
-      const target = pressLink;
-      pressTimer = null;
-      pressLink = null;
-      pressStart = null;
-      if (target && triggerReply(target)) {
-        suppressNextClickOn = target;
+      const target = pressTarget;
+      cancelPress();
+      if (target && triggerQuote(target)) {
         target.classList.add('tcqr-pressed');
         setTimeout(() => target.classList.remove('tcqr-pressed'), 180);
       }

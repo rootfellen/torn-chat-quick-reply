@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0 (2026-09-30)
+
+- Shift+click (or press-and-hold) on a message's *text*, instead of the sender's name, now quotes that whole message - inserts the sender's (bold-look) name on its own line, the message itself on the next line in brackets (truncated past ~120 characters), then a blank line to type your reply into, e.g.:
+  ```
+  ↪ 𝐌𝐚𝐝𝐠𝐨𝐝
+  [Follow me for more life hacks]
+
+  ```
+- Quoting respects your chosen mention style (↪ Name vs @Name) and shows the same "Replying to..." chip as a plain mention.
+- Note: Shift+click inside a chat message no longer extends a text selection there the way it normally would elsewhere on the page - that gesture is now reserved for quoting.
+- Avatar clicks (Shift+click or long-press) continue to do nothing, same as before.
+- Test suite grown to 42 browser tests to cover quoting, truncation, and the avatar-still-does-nothing edge case.
+
 ## 1.3.0 (2026-09-30)
 
 - The name in a mention is now written in bold-look Unicode characters (e.g. "↪ 𝐆𝐢𝐧𝐑𝐮𝐦𝐦𝐲 ") so it stands out in the sent message for everyone reading chat - no markdown support needed, since it's genuinely different characters, not formatting. Only the name changes; the "↪"/"@" prefix and the rest of your message stay as typed.

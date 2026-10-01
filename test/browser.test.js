@@ -6,6 +6,22 @@ const script = require('fs').readFileSync(path.join(__dirname, '..', 'torn-chat-
 const results = [];
 const ok = (name, cond) => results.push(`${cond ? 'PASS' : 'FAIL'}  ${name}`);
 
+// Mirrors the script's own toBoldUnicode(): only A-Z/a-z/0-9 become bold
+// lookalike characters, so expected mention text in assertions below can be
+// built the same way instead of hand-transcribing Unicode code points.
+function toBold(text) {
+  let result = '';
+  for (const ch of String(text)) {
+    const code = ch.codePointAt(0);
+    let boldCode = null;
+    if (code >= 0x41 && code <= 0x5a) boldCode = 0x1d400 + (code - 0x41);
+    else if (code >= 0x61 && code <= 0x7a) boldCode = 0x1d41a + (code - 0x61);
+    else if (code >= 0x30 && code <= 0x39) boldCode = 0x1d7ce + (code - 0x30);
+    result += boldCode !== null ? String.fromCodePoint(boldCode) : ch;
+  }
+  return result;
+}
+
 function chatMessage(name, xid, msgId) {
   return `<div class="virtualItem___eIUjo">
     <div class="root___EP_Dq first___icN1g">
@@ -60,22 +76,6 @@ const PAGE_HTML = `<!doctype html><html><body>
   p.on('request', (req) => { if (req.url().includes('profiles.php')) requests++; });
 
   const ARROW = '↪';
-
-  // Mirrors the script's own toBoldUnicode(): only A-Z/a-z/0-9 become bold
-  // lookalike characters, so expected mention text in these assertions can
-  // be built the same way instead of hand-transcribing Unicode code points.
-  function toBold(text) {
-    let result = '';
-    for (const ch of String(text)) {
-      const code = ch.codePointAt(0);
-      let boldCode = null;
-      if (code >= 0x41 && code <= 0x5a) boldCode = 0x1d400 + (code - 0x41);
-      else if (code >= 0x61 && code <= 0x7a) boldCode = 0x1d41a + (code - 0x61);
-      else if (code >= 0x30 && code <= 0x39) boldCode = 0x1d7ce + (code - 0x30);
-      result += boldCode !== null ? String.fromCodePoint(boldCode) : ch;
-    }
-    return result;
-  }
   const MASKY = toBold('masky');
   const BOB = toBold('bob');
 
@@ -299,11 +299,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   await touchStart('#global a.sender___WTwPI');
   await p.waitForTimeout(500); // longer than the 450ms long-press threshold
   const val = await p.locator('#global textarea').inputValue();
-  const boldMasky = Array.from('masky').map((ch) => {
-    const code = ch.codePointAt(0);
-    return String.fromCodePoint(code >= 0x61 && code <= 0x7a ? 0x1d41a + (code - 0x61) : code);
-  }).join('');
-  ok('press-and-hold inserts a mention just like shift+click does (bold name)', val === '↪ ' + boldMasky + ' ');
+  ok('press-and-hold inserts a mention just like shift+click does (bold name)', val === '↪ ' + toBold('masky') + ' ');
   ok('a chip appears from the long-press too', (await p.locator('#global .tcqr-chip').count()) === 1);
 
   // --- releasing after a successful long-press does not ALSO navigate ---
@@ -320,6 +316,70 @@ const PAGE_HTML = `<!doctype html><html><body>
   }, start);
   await p.waitForTimeout(500);
   ok('moving a finger cancels the long-press (scrolling, not holding)', (await p.locator('#faction .tcqr-chip').count()) === 0);
+  }
+
+  // --------------------------------------------------------------------- quoting
+  {
+  const ctx = await b.newContext();
+  const p = await ctx.newPage();
+  await p.route('https://www.torn.com/**', r => r.fulfill({ contentType: 'text/html', body: PAGE_HTML }));
+  await p.route('**/profiles.php**', r => r.fulfill({ contentType: 'text/html', body: '<html><body>profile</body></html>' }));
+  await p.goto('https://www.torn.com/loader.php');
+  await p.addScriptTag({ content: script });
+  await p.waitForTimeout(30);
+
+  let requests = 0;
+  p.on('request', (req) => { if (req.url().includes('profiles.php')) requests++; });
+
+  // --- shift+click on the message text (not the name) quotes the whole message ---
+  await p.locator('#global span.message___AI7N1').click({ modifiers: ['Shift'] });
+  const quoted1 = await p.locator('#global textarea').inputValue();
+  ok('shift+click on message text inserts a quote block with the bold name, the message in brackets, then a blank line',
+    quoted1 === '↪ ' + toBold('masky') + '\n[hello]\n\n');
+  ok('quoting a message never navigated to the profile', requests === 0);
+  ok('a "Replying to Name" chip also appears from quoting', (await p.locator('#global .tcqr-chip').count()) === 1);
+
+  // --- quoting respects the current mention style (↪ vs @), same as a plain mention ---
+  await p.evaluate(() => { document.querySelector('#global textarea').value = ''; });
+  await p.click('#global .tcqr-style-toggle');
+  await p.locator('#global span.message___AI7N1').click({ modifiers: ['Shift'] });
+  const quoted2 = await p.locator('#global textarea').inputValue();
+  ok('quoting with "@Name" style selected uses "@Name" instead of the arrow', quoted2 === '@' + toBold('masky') + '\n[hello]\n\n');
+  await p.click('#global .tcqr-style-toggle'); // back to the default for the rest of this block
+
+  // --- shift+clicking the avatar still does nothing (not a mention, not a quote) ---
+  await p.evaluate(() => { document.querySelector('#global textarea').value = ''; });
+  await p.locator('#global a[data-label="avatar"]').click({ modifiers: ['Shift'] });
+  const afterAvatar = await p.locator('#global textarea').inputValue();
+  ok('shift+clicking the avatar still does nothing even with quoting added', afterAvatar === '');
+
+  // --- a long message gets truncated in the quote, with the original left untouched in the chat log ---
+  const longMessage = 'x'.repeat(200);
+  await p.evaluate((msg) => {
+    document.querySelector('#global span.message___AI7N1').textContent = msg;
+  }, longMessage);
+  await p.evaluate(() => { document.querySelector('#global textarea').value = ''; });
+  await p.locator('#global span.message___AI7N1').click({ modifiers: ['Shift'] });
+  const quoted3 = await p.locator('#global textarea').inputValue();
+  const expectedTruncated = '[' + 'x'.repeat(120) + '…]';
+  ok('a long message is truncated to ~120 characters in the quote, with an ellipsis', quoted3.includes(expectedTruncated));
+
+  // --- press-and-hold on the message text (touch) quotes it too, same as shift+click ---
+  await p.evaluate(() => {
+    document.querySelector('#global span.message___AI7N1').textContent = 'hello';
+    document.querySelector('#global textarea').value = '';
+  });
+  const box = await p.locator('#global span.message___AI7N1').boundingBox();
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await p.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    const touch = new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], bubbles: true, cancelable: true }));
+  }, { x, y });
+  await p.waitForTimeout(500);
+  const quoted4 = await p.locator('#global textarea').inputValue();
+  ok('press-and-hold on message text quotes it, same as shift+click', quoted4 === '↪ ' + toBold('masky') + '\n[hello]\n\n');
   }
 
   // ------------------------------------------------------------- default click behaviour
