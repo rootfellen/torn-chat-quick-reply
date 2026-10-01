@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Chat Quick Reply
 // @namespace    https://github.com/rootfellen/torn-chat-quick-reply
-// @version      1.5.0
-// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, or shift+click/hold the message text itself to quote the whole message - both with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening. Names are rendered in bold-look Unicode so they stand out in the sent message for everyone, with no markdown needed, and a quote ends with an indented "↪" marking where your own reply starts.
+// @version      1.6.0
+// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, or shift+click/hold the message text itself (cursor turns into a pointer over it) to quote the whole message - both with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening. Names are rendered in bold-look Unicode so they stand out in the sent message for everyone, with no markdown needed.
 // @author       0o0o0
 // @license      MIT
 // @homepageURL  https://github.com/rootfellen/torn-chat-quick-reply
@@ -38,18 +38,20 @@
  *
  * Shift+click (or press-and-hold) on a message's *text* - instead of the
  * sender's name - quotes that specific message instead of just mentioning
- * them: it inserts the sender's (bold-look) name on its own line, the
- * message itself on the next line in brackets (truncated past ~120
- * characters), then a blank line with a small indented "↪" marking where
- * the actual reply gets typed, e.g.:
- *   ↪ 𝐌𝐚𝐝𝐠𝐨𝐝
- *   [Follow me for more life hacks]
+ * them: it inserts the message itself on its own line after a fixed "↪"
+ * (truncated past ~120 characters), a blank line, then the sender's own
+ * mention ("↪ Name " or "@Name ", following whichever style is currently
+ * selected) to address them right before typing the actual reply, e.g.:
+ *   ↪ I messaged him and he showed me ur butthole. Wasnt a good
+ *   transaction since i had already seen it
  *
- *       ↪   <cursor lands here>
- * That trailing arrow is always "↪", regardless of the @/↪ mention-style
- * toggle - it's a layout cue for where your own words start, not a mention -
- * and its indent uses non-breaking spaces so it isn't collapsed away like
- * regular spaces would be once the message is actually sent.
+ *   @𝐓𝐨𝐞𝐬 <cursor lands here>
+ * The leading quote arrow is always "↪" regardless of the @/↪ mention-style
+ * toggle - it marks "this is a quote", not a mention - while the line
+ * addressing them follows the toggle exactly like a plain mention does.
+ * Hovering over a message's text (not its sender's name/avatar) shows a
+ * pointer cursor, same hint that the name link already gives natively, so
+ * it's discoverable that the text itself can be shift+clicked too.
  *
  * Note this means Shift+click inside a chat message no longer extends a
  * text selection there the way it normally would elsewhere on the page.
@@ -252,31 +254,23 @@
     textarea.setSelectionRange(pos, pos);
   }
 
-  // A small indented "↪" marks where your own reply text starts, visually
-  // separating it from the quote above - always this arrow, regardless of
-  // the @/↪ mention-style toggle (it's a layout cue, not a mention).
-  // Regular spaces get collapsed down to one by normal HTML whitespace
-  // rules, so the indent itself uses non-breaking spaces (U+00A0) instead,
-  // which survive that collapsing and actually show up indented once sent.
-  const QUOTE_REPLY_INDENT = '\u00A0'.repeat(4);
-  const QUOTE_REPLY_ARROW = '↪';
+  // The quote line always starts with this fixed arrow, regardless of the
+  // @/↪ mention-style toggle - it marks "this is a quote", not a mention.
+  const QUOTE_LINE_ARROW = '↪';
 
   /**
-   * "↪ Name" (or "@Name") on its own line, the quoted message text on the
-   * next line in brackets, then a blank line and an indented "↪" where the
-   * actual reply gets typed - e.g.:
-   *   ↪ Madgod
-   *   [Follow me for more life hacks]
+   * "↪ <their message>", a blank line, then the sender's own mention
+   * ("↪ Name " or "@Name ", following the current style toggle exactly
+   * like a plain mention does) to address them before typing the actual
+   * reply right after it - e.g.:
+   *   ↪ I messaged him and he showed me ur butthole. Wasnt a good
+   *   transaction since i had already seen it
    *
-   *       ↪   <cursor here>
+   *   @𝐓𝐨𝐞𝐬 <cursor here>
    */
   function buildQuoteBlock(name, messageText) {
-    const style = getMentionStyle();
-    const boldName = toBoldUnicode(name);
-    const header = style === 'at' ? ('@' + boldName) : (MENTION_GLYPH[style] + ' ' + boldName);
-    const quoted = '[' + truncateQuote(messageText) + ']';
-    const replyPrompt = QUOTE_REPLY_INDENT + QUOTE_REPLY_ARROW + '  ';
-    return header + '\n' + quoted + '\n\n' + replyPrompt;
+    const quoteLine = QUOTE_LINE_ARROW + ' ' + truncateQuote(messageText);
+    return quoteLine + '\n\n' + formatMention(name);
   }
 
   function insertQuote(textarea, name, messageText) {
@@ -574,10 +568,27 @@
   window.addEventListener('mouseover', (e) => {
     const chatRoot = e.target.closest ? e.target.closest(CHAT_ROOT_SELECTOR) : null;
     if (!chatRoot) return;
+
     const link = findSenderLink(e.target);
-    if (!link || link.dataset.tcqrHint) return;
-    link.dataset.tcqrHint = '1';
-    const name = extractName(link.textContent);
-    if (name && !link.title) link.title = 'Shift+click (or press and hold) to reply to ' + name;
+    if (link) {
+      if (link.dataset.tcqrHint) return;
+      link.dataset.tcqrHint = '1';
+      const name = extractName(link.textContent);
+      if (name && !link.title) link.title = 'Shift+click (or press and hold) to reply to ' + name;
+      return;
+    }
+
+    // A pointer cursor over the message text itself hints that it, too, is
+    // clickable (for quoting) - everything in the row except the sender's
+    // own name/avatar area, so this doesn't fight their native link cursor.
+    if (e.target.closest && e.target.closest('a[data-label="avatar"]')) return;
+    const row = findMessageRow(e.target);
+    if (!row || row.dataset.tcqrHoverReady) return;
+    row.dataset.tcqrHoverReady = '1';
+    const senderContainer = row.querySelector('[class*="senderContainer"]');
+    Array.from(row.children).forEach((child) => {
+      if (senderContainer && (child === senderContainer || child.contains(senderContainer))) return;
+      child.style.cursor = 'pointer';
+    });
   }, true);
 })();

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0 (2026-09-30)
+
+- Quoting a message now looks like this instead of the old bracketed/indented-arrow layout:
+  ```
+  ↪ I messaged him and he showed me ur butthole. Wasnt a good transaction since i had already seen it
+
+  @𝐓𝐨𝐞𝐬 <your reply here>
+  ```
+  The quote line always starts with a fixed "↪" (never "@", regardless of your style toggle); the line addressing the sender right before your reply follows your chosen "↪ Name"/"@Name" style exactly like a plain mention does.
+- Hovering over a message's text (not the sender's name or avatar) now shows a pointer cursor, hinting that it can be shift+clicked (or long-pressed) to quote it too.
+- Test suite still at 43 browser tests, updated for the new quote format and the hover cursor.
+
 ## 1.5.0 (2026-09-30)
 
 - A quote now ends with a small indented "↪" marking exactly where your own reply starts, instead of just a blank line, e.g.:
