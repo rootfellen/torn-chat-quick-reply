@@ -61,10 +61,28 @@ const PAGE_HTML = `<!doctype html><html><body>
 
   const ARROW = '↪';
 
-  // --- shift+click on a sender name inserts "↪ Name " (the default style) into that channel's own textarea ---
+  // Mirrors the script's own toBoldUnicode(): only A-Z/a-z/0-9 become bold
+  // lookalike characters, so expected mention text in these assertions can
+  // be built the same way instead of hand-transcribing Unicode code points.
+  function toBold(text) {
+    let result = '';
+    for (const ch of String(text)) {
+      const code = ch.codePointAt(0);
+      let boldCode = null;
+      if (code >= 0x41 && code <= 0x5a) boldCode = 0x1d400 + (code - 0x41);
+      else if (code >= 0x61 && code <= 0x7a) boldCode = 0x1d41a + (code - 0x61);
+      else if (code >= 0x30 && code <= 0x39) boldCode = 0x1d7ce + (code - 0x30);
+      result += boldCode !== null ? String.fromCodePoint(boldCode) : ch;
+    }
+    return result;
+  }
+  const MASKY = toBold('masky');
+  const BOB = toBold('bob');
+
+  // --- shift+click on a sender name inserts "↪ Name " (the default style, name in bold-look Unicode) into that channel's own textarea ---
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const globalVal1 = await p.locator('#global textarea').inputValue();
-  ok('shift+click inserts "↪ Name " into the message box by default', globalVal1 === ARROW + ' masky ');
+  ok('shift+click inserts "↪ Name " into the message box by default', globalVal1 === ARROW + ' ' + MASKY + ' ');
 
   const factionVal1 = await p.locator('#faction textarea').inputValue();
   ok('the other channel\'s textarea is untouched', factionVal1 === '');
@@ -76,14 +94,14 @@ const PAGE_HTML = `<!doctype html><html><body>
   // --- shift+click in a different channel targets that channel's own textarea ---
   await p.locator('#faction a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const factionVal2 = await p.locator('#faction textarea').inputValue();
-  ok('shift+click in a second channel fills that channel\'s own box', factionVal2 === ARROW + ' bob ');
+  ok('shift+click in a second channel fills that channel\'s own box', factionVal2 === ARROW + ' ' + BOB + ' ');
   const globalVal2 = await p.locator('#global textarea').inputValue();
-  ok('first channel\'s box still has only its own mention', globalVal2 === ARROW + ' masky ');
+  ok('first channel\'s box still has only its own mention', globalVal2 === ARROW + ' ' + MASKY + ' ');
 
   // --- clicking the same name again appends, with a separating space ---
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const globalVal3 = await p.locator('#global textarea').inputValue();
-  ok('a second shift+click appends another mention with a space between', globalVal3 === ARROW + ' masky ' + ARROW + ' masky ');
+  ok('a second shift+click appends another mention with a space between', globalVal3 === ARROW + ' ' + MASKY + ' ' + ARROW + ' ' + MASKY + ' ');
 
   // --- clicking the avatar picture (not the name) does nothing ---
   const beforeAvatarClick = await p.locator('#global textarea').inputValue();
@@ -95,7 +113,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   await p.locator('#outside-link').click({ modifiers: ['Shift'] });
   const globalVal4 = await p.locator('#global textarea').inputValue();
   const factionVal4 = await p.locator('#faction textarea').inputValue();
-  ok('a profile link outside the chatbox is ignored entirely', globalVal4 === globalVal3 && factionVal4 === ARROW + ' bob ');
+  ok('a profile link outside the chatbox is ignored entirely', globalVal4 === globalVal3 && factionVal4 === ARROW + ' ' + BOB + ' ');
 
   ok('none of this ever made a request to profiles.php', requests === 0);
 
@@ -105,7 +123,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   await p.waitForTimeout(30);
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const globalVal5 = await p.locator('#global textarea').inputValue();
-  ok('double injection -> a single shift+click still inserts exactly one mention', globalVal5 === ARROW + ' masky ');
+  ok('double injection -> a single shift+click still inserts exactly one mention', globalVal5 === ARROW + ' ' + MASKY + ' ');
 
   // --- hover hint ---
   await p.hover('#faction a.sender___WTwPI');
@@ -120,7 +138,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   const beforeToggleVal = await p.locator('#global textarea').inputValue();
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const afterToggleVal = await p.locator('#global textarea').inputValue();
-  ok('toggling the chip\'s style switch switches new mentions to "@Name "', afterToggleVal === beforeToggleVal + '@masky ');
+  ok('toggling the chip\'s style switch switches new mentions to "@Name "', afterToggleVal === beforeToggleVal + '@' + MASKY + ' ');
 
   // --- the toggle persists across a reload (the one thing this script stores) ---
   await p.reload();
@@ -128,13 +146,13 @@ const PAGE_HTML = `<!doctype html><html><body>
   await p.waitForTimeout(30);
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const afterReloadVal = await p.locator('#global textarea').inputValue();
-  ok('the chosen mention style is remembered after a reload', afterReloadVal === '@masky ');
+  ok('the chosen mention style is remembered after a reload', afterReloadVal === '@' + MASKY + ' ');
 
   // --- toggling back switches new mentions back to the arrow style ---
   await p.click('#global .tcqr-style-toggle');
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const backToArrowVal = await p.locator('#global textarea').inputValue();
-  ok('toggling again switches back to the "↪ Name " style', backToArrowVal === '@masky ' + ARROW + ' masky ');
+  ok('toggling again switches back to the "↪ Name " style', backToArrowVal === '@' + MASKY + ' ' + ARROW + ' ' + MASKY + ' ');
   }
 
   // ---------------------------------------------------------------- reply chip
@@ -281,7 +299,11 @@ const PAGE_HTML = `<!doctype html><html><body>
   await touchStart('#global a.sender___WTwPI');
   await p.waitForTimeout(500); // longer than the 450ms long-press threshold
   const val = await p.locator('#global textarea').inputValue();
-  ok('press-and-hold inserts a mention just like shift+click does', val === '↪ masky ');
+  const boldMasky = Array.from('masky').map((ch) => {
+    const code = ch.codePointAt(0);
+    return String.fromCodePoint(code >= 0x61 && code <= 0x7a ? 0x1d41a + (code - 0x61) : code);
+  }).join('');
+  ok('press-and-hold inserts a mention just like shift+click does (bold name)', val === '↪ ' + boldMasky + ' ');
   ok('a chip appears from the long-press too', (await p.locator('#global .tcqr-chip').count()) === 1);
 
   // --- releasing after a successful long-press does not ALSO navigate ---

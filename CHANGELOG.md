@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0 (2026-09-30)
+
+- The name in a mention is now written in bold-look Unicode characters (e.g. "↪ 𝐆𝐢𝐧𝐑𝐮𝐦𝐦𝐲 ") so it stands out in the sent message for everyone reading chat - no markdown support needed, since it's genuinely different characters, not formatting. Only the name changes; the "↪"/"@" prefix and the rest of your message stay as typed.
+
 ## 1.2.0 (2026-09-30)
 
 - Mentions now default to "↪ Name " instead of "@Name " — reads more clearly as "replying to"

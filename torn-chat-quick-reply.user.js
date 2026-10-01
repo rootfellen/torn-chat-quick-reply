@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Chat Quick Reply
 // @namespace    https://github.com/rootfellen/torn-chat-quick-reply
-// @version      1.2.0
-// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening.
+// @version      1.3.0
+// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening. The name itself is rendered in bold-look Unicode so it stands out in the sent message for everyone, with no markdown needed.
 // @author       0o0o0
 // @license      MIT
 // @homepageURL  https://github.com/rootfellen/torn-chat-quick-reply
@@ -31,7 +31,10 @@
  * once the message is actually sent. The chip has its own small toggle to
  * flip between the "↪ Name" and "@Name" styles for mentions you queue up
  * from then on; the choice is remembered (in localStorage, nothing else is
- * ever stored) for next time.
+ * ever stored) for next time. The name itself is written using Unicode
+ * characters that look bold (e.g. "↪ 𝐆𝐢𝐧𝐑𝐮𝐦𝐦𝐲 ") so it stands out in the
+ * sent message for anyone reading, even without this script - it's just
+ * plain text, no markdown or formatting support required.
  *
  * It never reads anything outside the chatbox, never makes a network
  * request, and never submits or sends anything - it only ever fills in the
@@ -138,11 +141,36 @@
     }
   }
 
+  /**
+   * Torn's chat renders plain text only - no bold, no markdown - so the only
+   * way to make the name stand out for everyone reading, not just people
+   * running this script, is to use different *characters* that happen to
+   * look bold. The Unicode Mathematical Alphanumeric Symbols block has a
+   * full bold A-Z/a-z/0-9 set for exactly this; everything else in the name
+   * (spaces, punctuation) is left alone. Supported by every current
+   * browser/OS Torn runs on; a very old font could show a blank box instead
+   * of a letter, which is why only the name is converted, never the ↪/@
+   * prefix or the rest of the message.
+   */
+  function toBoldUnicode(text) {
+    let result = '';
+    for (const ch of String(text || '')) {
+      const code = ch.codePointAt(0);
+      let boldCode = null;
+      if (code >= 0x41 && code <= 0x5a) boldCode = 0x1d400 + (code - 0x41); // A-Z
+      else if (code >= 0x61 && code <= 0x7a) boldCode = 0x1d41a + (code - 0x61); // a-z
+      else if (code >= 0x30 && code <= 0x39) boldCode = 0x1d7ce + (code - 0x30); // 0-9
+      result += boldCode !== null ? String.fromCodePoint(boldCode) : ch;
+    }
+    return result;
+  }
+
   function formatMention(name) {
     const style = getMentionStyle();
+    const boldName = toBoldUnicode(name);
     // "@Name " sits tight against the name (the usual @mention convention);
     // "↪ Name " reads as its own word, so it gets a space after it.
-    return style === 'at' ? ('@' + name + ' ') : (MENTION_GLYPH[style] + ' ' + name + ' ');
+    return style === 'at' ? ('@' + boldName + ' ') : (MENTION_GLYPH[style] + ' ' + boldName + ' ');
   }
 
   function insertMention(textarea, name) {
