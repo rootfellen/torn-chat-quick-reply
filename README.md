@@ -5,7 +5,7 @@ A free userscript for [Torn](https://www.torn.com) that lets you reply to someon
 **Shift+click** (desktop) or **press and hold** (touch, including Torn PDA) a person's **name** in Torn's chatbox to insert `↪ 𝗡𝗮𝗺𝗲 ` into that chat's message box, ready to type. Do the same on the **message text itself** instead to quote the whole message:
 
 ```
-↪ I messaged him and he showed me ur butthole. Wasnt a good transaction since i had already seen it
+↪ I messaged him and he showed me ur photo. Wasnt a good transaction since i had already seen it
 
 @𝗧𝗼𝗲𝘀 
 ```
