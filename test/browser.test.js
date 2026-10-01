@@ -187,6 +187,93 @@ const PAGE_HTML = `<!doctype html><html><body>
   ok('the other channel\'s chip is unaffected by that send', (await p.locator('#global .tcqr-chip').count()) === 1);
   }
 
+  // ------------------------------------------------- touch long-press (Torn PDA)
+  // A quick tap genuinely navigates the page away (same as a real plain
+  // click would), which would wipe out the DOM for every assertion after
+  // it - so that one check gets its own throwaway context.
+  {
+  const ctx = await b.newContext();
+  const p = await ctx.newPage();
+  await p.route('https://www.torn.com/**', r => r.fulfill({ contentType: 'text/html', body: PAGE_HTML }));
+  await p.route('**/profiles.php**', r => r.fulfill({ contentType: 'text/html', body: '<html><body>profile</body></html>' }));
+  await p.goto('https://www.torn.com/loader.php');
+  await p.addScriptTag({ content: script });
+  await p.waitForTimeout(30);
+
+  let requests = 0;
+  p.on('request', (req) => { if (req.url().includes('profiles.php')) requests++; });
+
+  const box = await p.locator('#global a.sender___WTwPI').boundingBox();
+  await p.evaluate(({ x, y }) => {
+    const el = document.elementFromPoint(x, y);
+    const down = new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: [down], bubbles: true, cancelable: true }));
+    const up = new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+    el.dispatchEvent(new TouchEvent('touchend', { changedTouches: [up], bubbles: true, cancelable: true }));
+    el.click(); // the browser's own synthetic click that follows a real tap
+  }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+  await p.waitForTimeout(30);
+  ok('a quick tap (no hold) on a sender name still navigates to their profile', requests > 0);
+  }
+
+  // The rest never lets a real navigation happen, so they can share one page.
+  {
+  const ctx = await b.newContext();
+  const p = await ctx.newPage();
+  await p.route('https://www.torn.com/**', r => r.fulfill({ contentType: 'text/html', body: PAGE_HTML }));
+  await p.route('**/profiles.php**', r => r.fulfill({ contentType: 'text/html', body: '<html><body>profile</body></html>' }));
+  await p.goto('https://www.torn.com/loader.php');
+  await p.addScriptTag({ content: script });
+  await p.waitForTimeout(30);
+
+  let requests = 0;
+  p.on('request', (req) => { if (req.url().includes('profiles.php')) requests++; });
+
+  async function touchStart(selector) {
+    const box = await p.locator(selector).boundingBox();
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await p.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      window.__tcqrTouchTarget = el;
+      const touch = new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+      el.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], bubbles: true, cancelable: true }));
+    }, { x, y });
+    return { x, y };
+  }
+
+  async function touchEndAndClick() {
+    await p.evaluate(() => {
+      const el = window.__tcqrTouchTarget;
+      const touch = new Touch({ identifier: 1, target: el, clientX: 0, clientY: 0 });
+      el.dispatchEvent(new TouchEvent('touchend', { changedTouches: [touch], bubbles: true, cancelable: true }));
+      el.click(); // the browser's own synthetic click that follows a real tap
+    });
+  }
+
+  // --- press and hold inserts the mention and shows the chip, just like shift+click ---
+  await touchStart('#global a.sender___WTwPI');
+  await p.waitForTimeout(500); // longer than the 450ms long-press threshold
+  const val = await p.locator('#global textarea').inputValue();
+  ok('press-and-hold inserts "@Name " just like shift+click does', val === '@masky ');
+  ok('a chip appears from the long-press too', (await p.locator('#global .tcqr-chip').count()) === 1);
+
+  // --- releasing after a successful long-press does not ALSO navigate ---
+  await touchEndAndClick();
+  await p.waitForTimeout(30);
+  ok('releasing after a long-press does not also navigate to the profile', requests === 0);
+
+  // --- moving a finger (scrolling) cancels a would-be long-press ---
+  const start = await touchStart('#faction a.sender___WTwPI');
+  await p.evaluate(({ x, y }) => {
+    const el = window.__tcqrTouchTarget;
+    const touch = new Touch({ identifier: 1, target: el, clientX: x + 40, clientY: y + 40 });
+    el.dispatchEvent(new TouchEvent('touchmove', { touches: [touch], bubbles: true, cancelable: true }));
+  }, start);
+  await p.waitForTimeout(500);
+  ok('moving a finger cancels the long-press (scrolling, not holding)', (await p.locator('#faction .tcqr-chip').count()) === 0);
+  }
+
   // ------------------------------------------------------------- default click behaviour
   {
   const ctx = await b.newContext();

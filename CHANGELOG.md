@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 (2026-09-30)
+
+- Added **press-and-hold** on touch devices (Torn PDA included) as the equivalent of Shift+click — there's no Shift key on a touchscreen, so a brief hold on a sender's name now does the same thing a desktop Shift+click does. A quick tap still opens the profile, unchanged.
+- The chip now also clears when a reply is sent via a long-press, same as it does for Enter/the send button.
+- Test suite grown to 32 browser tests to cover the new touch behaviour.
+
 ## 1.0.0 (2026-09-30)
 
 First public release.

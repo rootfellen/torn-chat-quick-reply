@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Chat Quick Reply
 // @namespace    https://github.com/rootfellen/torn-chat-quick-reply
-// @version      1.0.0
-// @description  Shift+click a name in Torn's chatbox to insert an @mention into that chat's message box, with a small "Replying to Name" chip so it's obvious what's happening.
+// @version      1.1.0
+// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert an @mention into that chat's message box, with a small "Replying to Name" chip so it's obvious what's happening.
 // @author       0o0o0
 // @license      MIT
 // @homepageURL  https://github.com/rootfellen/torn-chat-quick-reply
@@ -20,13 +20,14 @@
  * Torn Chat Quick Reply
  * ----------------------
  * Torn's chatbox (#chatRoot) shows each message's sender as a link to their
- * profile. A plain click still opens that profile, exactly like today -
- * this script changes nothing about that. Holding Shift while clicking the
- * sender's name instead inserts "@Name " into that same chat channel's
- * message box and focuses it, so replying to someone doesn't mean typing
- * their name out by hand. A small "Replying to Name" chip appears above the
- * box so it's obvious a reply is queued up, with a x to dismiss it; it also
- * clears itself once the message box is emptied (e.g. after sending).
+ * profile. A plain click (or a quick tap on touch) still opens that profile,
+ * exactly like today - this script changes nothing about that. Holding Shift
+ * while clicking the sender's name - or, with no keyboard at all on Torn PDA,
+ * pressing and holding the name briefly - instead inserts "@Name " into that
+ * same chat channel's message box and focuses it, so replying to someone
+ * doesn't mean typing their name out by hand. A small "Replying to Name" chip
+ * appears above the box so it's obvious a reply is queued up, with a x to
+ * dismiss it; it also clears itself once the message is actually sent.
  *
  * It never reads anything outside the chatbox, never makes a network
  * request, and never submits or sends anything - it only ever fills in the
@@ -151,6 +152,7 @@
       .tcqr-chip-close{background:none;border:0;cursor:pointer;font-size:12px;
         color:inherit;opacity:.65;padding:0 2px;line-height:1;font-family:inherit}
       .tcqr-chip-close:hover{opacity:1}
+      .tcqr-pressed{background:rgba(110,150,255,.25);border-radius:3px}
     `;
     document.head.appendChild(style);
   }
@@ -205,7 +207,32 @@
     chip.firstChild.textContent = 'Replying to ' + Array.from(names).join(', ');
   }
 
+  /**
+   * Shared by Shift+click and the touch long-press below: finds the right
+   * textarea for the sender that was just activated and queues the reply.
+   * Returns true if a reply was actually queued, so a caller can decide
+   * whether to swallow the triggering event.
+   */
+  function triggerReply(link) {
+    const textarea = findChannelTextarea(link);
+    if (!textarea) return false;
+    const name = extractName(link.textContent);
+    if (!name) return false;
+    insertMention(textarea, name);
+    showReplyChip(textarea, name);
+    return true;
+  }
+
   window.addEventListener('click', (e) => {
+    // Swallow the "ghost" click that follows a successful long-press on
+    // touch, so it doesn't also navigate to the profile right afterward.
+    if (suppressNextClickOn && e.target.closest && e.target.closest('a') === suppressNextClickOn) {
+      suppressNextClickOn = null;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
     if (!e.shiftKey) return; // plain click keeps Torn's own behaviour (opens the profile)
     const chatRoot = e.target.closest ? e.target.closest(CHAT_ROOT_SELECTOR) : null;
     if (!chatRoot) return;
@@ -213,17 +240,69 @@
     const link = findSenderLink(e.target);
     if (!link) return;
 
-    const textarea = findChannelTextarea(link);
-    if (!textarea) return;
-
-    const name = extractName(link.textContent);
-    if (!name) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    insertMention(textarea, name);
-    showReplyChip(textarea, name);
+    if (triggerReply(link)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   }, true);
+
+  // ------------------------------------------------- touch (Torn PDA, tablets)
+  // There's no Shift key on a touchscreen, so the equivalent gesture is a
+  // brief press-and-hold: a quick tap still opens the profile (untouched,
+  // same as a plain click), holding it down queues the reply instead.
+  const LONG_PRESS_MS = 450;
+  const MOVE_CANCEL_PX = 12;
+  let pressTimer = null;
+  let pressLink = null;
+  let pressStart = null;
+  let suppressNextClickOn = null;
+
+  function cancelPress() {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+    pressLink = null;
+    pressStart = null;
+  }
+
+  window.addEventListener('touchstart', (e) => {
+    const chatRoot = e.target.closest ? e.target.closest(CHAT_ROOT_SELECTOR) : null;
+    if (!chatRoot) return;
+    const link = findSenderLink(e.target);
+    if (!link || !e.touches || !e.touches[0]) return;
+
+    // Suppresses the native text-selection/callout menu a long press on a
+    // link normally brings up, without touching anything else about it.
+    if (!link.dataset.tcqrTouchReady) {
+      link.dataset.tcqrTouchReady = '1';
+      link.style.webkitTouchCallout = 'none';
+      link.style.webkitUserSelect = 'none';
+      link.style.userSelect = 'none';
+    }
+
+    pressLink = link;
+    pressStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    pressTimer = setTimeout(() => {
+      const target = pressLink;
+      pressTimer = null;
+      pressLink = null;
+      pressStart = null;
+      if (target && triggerReply(target)) {
+        suppressNextClickOn = target;
+        target.classList.add('tcqr-pressed');
+        setTimeout(() => target.classList.remove('tcqr-pressed'), 180);
+      }
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!pressStart || !e.touches || !e.touches[0]) return;
+    const dx = e.touches[0].clientX - pressStart.x;
+    const dy = e.touches[0].clientY - pressStart.y;
+    if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) cancelPress(); // scrolling, not holding
+  }, { passive: true });
+
+  window.addEventListener('touchend', cancelPress, true);
+  window.addEventListener('touchcancel', cancelPress, true);
 
   // Torn sends a chat message either by pressing Enter in the box (Shift+Enter
   // makes a newline instead) or by clicking its send button. Reacting to
@@ -256,6 +335,6 @@
     if (!link || link.dataset.tcqrHint) return;
     link.dataset.tcqrHint = '1';
     const name = extractName(link.textContent);
-    if (name && !link.title) link.title = 'Shift+click to reply to ' + name;
+    if (name && !link.title) link.title = 'Shift+click (or press and hold) to reply to ' + name;
   }, true);
 })();
