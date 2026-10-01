@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-09-30)
+
+- Mentions now default to "↪ Name " instead of "@Name " — reads more clearly as "replying to"
+- Added a small toggle in the "Replying to..." chip to switch between the "↪ Name" and "@Name" styles; it only affects new mentions from then on, and your choice is remembered next time (the one thing this script now stores locally — nothing else)
+
 ## 1.1.0 (2026-09-30)
 
 - Added **press-and-hold** on touch devices (Torn PDA included) as the equivalent of Shift+click — there's no Shift key on a touchscreen, so a brief hold on a sender's name now does the same thing a desktop Shift+click does. A quick tap still opens the profile, unchanged.

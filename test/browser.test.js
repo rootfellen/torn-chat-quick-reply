@@ -59,10 +59,12 @@ const PAGE_HTML = `<!doctype html><html><body>
   let requests = 0;
   p.on('request', (req) => { if (req.url().includes('profiles.php')) requests++; });
 
-  // --- shift+click on a sender name inserts "@Name " into that channel's own textarea ---
+  const ARROW = '↪';
+
+  // --- shift+click on a sender name inserts "↪ Name " (the default style) into that channel's own textarea ---
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const globalVal1 = await p.locator('#global textarea').inputValue();
-  ok('shift+click inserts "@Name " into the message box', globalVal1 === '@masky ');
+  ok('shift+click inserts "↪ Name " into the message box by default', globalVal1 === ARROW + ' masky ');
 
   const factionVal1 = await p.locator('#faction textarea').inputValue();
   ok('the other channel\'s textarea is untouched', factionVal1 === '');
@@ -74,14 +76,14 @@ const PAGE_HTML = `<!doctype html><html><body>
   // --- shift+click in a different channel targets that channel's own textarea ---
   await p.locator('#faction a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const factionVal2 = await p.locator('#faction textarea').inputValue();
-  ok('shift+click in a second channel fills that channel\'s own box', factionVal2 === '@bob ');
+  ok('shift+click in a second channel fills that channel\'s own box', factionVal2 === ARROW + ' bob ');
   const globalVal2 = await p.locator('#global textarea').inputValue();
-  ok('first channel\'s box still has only its own mention', globalVal2 === '@masky ');
+  ok('first channel\'s box still has only its own mention', globalVal2 === ARROW + ' masky ');
 
   // --- clicking the same name again appends, with a separating space ---
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const globalVal3 = await p.locator('#global textarea').inputValue();
-  ok('a second shift+click appends another mention with a space between', globalVal3 === '@masky @masky ');
+  ok('a second shift+click appends another mention with a space between', globalVal3 === ARROW + ' masky ' + ARROW + ' masky ');
 
   // --- clicking the avatar picture (not the name) does nothing ---
   const beforeAvatarClick = await p.locator('#global textarea').inputValue();
@@ -93,7 +95,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   await p.locator('#outside-link').click({ modifiers: ['Shift'] });
   const globalVal4 = await p.locator('#global textarea').inputValue();
   const factionVal4 = await p.locator('#faction textarea').inputValue();
-  ok('a profile link outside the chatbox is ignored entirely', globalVal4 === globalVal3 && factionVal4 === '@bob ');
+  ok('a profile link outside the chatbox is ignored entirely', globalVal4 === globalVal3 && factionVal4 === ARROW + ' bob ');
 
   ok('none of this ever made a request to profiles.php', requests === 0);
 
@@ -103,12 +105,36 @@ const PAGE_HTML = `<!doctype html><html><body>
   await p.waitForTimeout(30);
   await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
   const globalVal5 = await p.locator('#global textarea').inputValue();
-  ok('double injection -> a single shift+click still inserts exactly one mention', globalVal5 === '@masky ');
+  ok('double injection -> a single shift+click still inserts exactly one mention', globalVal5 === ARROW + ' masky ');
 
   // --- hover hint ---
   await p.hover('#faction a.sender___WTwPI');
   const title = await p.locator('#faction a.sender___WTwPI').getAttribute('title');
   ok('hovering a sender name adds a Shift+click hint tooltip', /shift\+click/i.test(title || ''));
+
+  // --- the chip's style toggle switches new mentions to "@Name" (checked
+  // relatively - never blank the box by hand here, since clearing it would
+  // race the chip's own 250ms "box went empty" poll and remove the chip
+  // (and its toggle button) out from under the click) ---
+  await p.click('#global .tcqr-style-toggle');
+  const beforeToggleVal = await p.locator('#global textarea').inputValue();
+  await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
+  const afterToggleVal = await p.locator('#global textarea').inputValue();
+  ok('toggling the chip\'s style switch switches new mentions to "@Name "', afterToggleVal === beforeToggleVal + '@masky ');
+
+  // --- the toggle persists across a reload (the one thing this script stores) ---
+  await p.reload();
+  await p.addScriptTag({ content: script });
+  await p.waitForTimeout(30);
+  await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
+  const afterReloadVal = await p.locator('#global textarea').inputValue();
+  ok('the chosen mention style is remembered after a reload', afterReloadVal === '@masky ');
+
+  // --- toggling back switches new mentions back to the arrow style ---
+  await p.click('#global .tcqr-style-toggle');
+  await p.locator('#global a.sender___WTwPI').click({ modifiers: ['Shift'] });
+  const backToArrowVal = await p.locator('#global textarea').inputValue();
+  ok('toggling again switches back to the "↪ Name " style', backToArrowVal === '@masky ' + ARROW + ' masky ');
   }
 
   // ---------------------------------------------------------------- reply chip
@@ -255,7 +281,7 @@ const PAGE_HTML = `<!doctype html><html><body>
   await touchStart('#global a.sender___WTwPI');
   await p.waitForTimeout(500); // longer than the 450ms long-press threshold
   const val = await p.locator('#global textarea').inputValue();
-  ok('press-and-hold inserts "@Name " just like shift+click does', val === '@masky ');
+  ok('press-and-hold inserts a mention just like shift+click does', val === '↪ masky ');
   ok('a chip appears from the long-press too', (await p.locator('#global .tcqr-chip').count()) === 1);
 
   // --- releasing after a successful long-press does not ALSO navigate ---

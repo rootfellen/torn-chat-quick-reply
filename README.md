@@ -2,15 +2,15 @@
 
 A free userscript for [Torn](https://www.torn.com) that lets you reply to someone in chat without typing their name out.
 
-**Shift+click** (desktop) or **press and hold** (touch, including Torn PDA) a person's name in Torn's chatbox to insert `@Name ` into that chat's message box, ready to type. A plain click or quick tap still opens their profile, exactly like it already does — nothing about the normal click changes.
+**Shift+click** (desktop) or **press and hold** (touch, including Torn PDA) a person's name in Torn's chatbox to insert `↪ Name ` into that chat's message box, ready to type. A plain click or quick tap still opens their profile, exactly like it already does — nothing about the normal click changes.
 
 ## What it does
 
 Inside Torn's chatbox (global, faction, company — wherever it shows up):
 
-- **Shift+click a sender's name** (desktop) → `@Name ` is inserted at the end of that chat's message box and the box is focused, cursor at the end.
+- **Shift+click a sender's name** (desktop) → `↪ Name ` is inserted at the end of that chat's message box and the box is focused, cursor at the end.
 - **Press and hold a sender's name** (touch devices, Torn PDA) does the same thing — there's no Shift key on a touchscreen, so a brief hold is the equivalent gesture. A quick tap still opens the profile.
-- A small **"Replying to Name" chip** appears above the message box so it's obvious a reply is queued up. Shift+click or hold more names before sending and they're all added to the same chip. Click its ✕ to dismiss it, or just send your message — it clears itself the moment you actually send.
+- A small **"Replying to Name" chip** appears above the message box so it's obvious a reply is queued up. Shift+click or hold more names before sending and they're all added to the same chip. The chip also has a small **style toggle** to switch new mentions between `↪ Name` and `@Name` — your choice is remembered next time. Click the chip's ✕ to dismiss it, or just send your message — it clears itself the moment you actually send.
 - **Plain click/tap** on a name still opens their profile, same as today. This script only adds the reply gesture; it never removes or changes the existing one.
 - Works correctly even with **multiple chat channels open at once** — the mention always lands in the same channel the message was posted in, not whichever one happens to be on top.
 - Hover a sender's name and you'll see a tooltip reminding you how to reply.
@@ -48,15 +48,15 @@ This script:
 
 ## Privacy & security
 
-Nothing is collected, stored, or sent anywhere — the script is entirely stateless. See [SECURITY.md](SECURITY.md) for details, and the script is a single readable file if you'd like to check it yourself.
+Nothing is collected or sent anywhere. The only thing saved locally is your `↪ Name` vs `@Name` style preference, in your browser's own `localStorage` — nothing else. See [SECURITY.md](SECURITY.md) for details, and the script is a single readable file if you'd like to check it yourself.
 
 ## Troubleshooting
 
-| Problem                                  | Fix                                                                                                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shift+click does nothing                 | Make sure you're actually holding Shift down while clicking directly on the name text (not the avatar picture), and that the script is enabled in your userscript manager.            |
+| Problem | Fix |
+|---|---|
+| Shift+click does nothing | Make sure you're actually holding Shift down while clicking directly on the name text (not the avatar picture), and that the script is enabled in your userscript manager. |
 | The mention landed in the wrong chat tab | [Open an issue](https://github.com/rootfellen/torn-chat-quick-reply/issues) with a screenshot — Torn occasionally changes its chat markup, and the matching logic may need an update. |
-| Plain click stopped opening profiles     | This script never touches plain clicks, so this shouldn't happen. Try disabling other chat-related userscripts one at a time to find a conflict.                                      |
+| Plain click stopped opening profiles | This script never touches plain clicks, so this shouldn't happen. Try disabling other chat-related userscripts one at a time to find a conflict. |
 
 ## Development
 

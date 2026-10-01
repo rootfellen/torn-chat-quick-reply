@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Chat Quick Reply
 // @namespace    https://github.com/rootfellen/torn-chat-quick-reply
-// @version      1.1.0
-// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert an @mention into that chat's message box, with a small "Replying to Name" chip so it's obvious what's happening.
+// @version      1.2.0
+// @description  Shift+click (or press-and-hold on touch/PDA) a name in Torn's chatbox to insert a mention into that chat's message box, with a small "Replying to Name" chip (and a toggle for @Name vs the ↪ Name style) so it's obvious what's happening.
 // @author       0o0o0
 // @license      MIT
 // @homepageURL  https://github.com/rootfellen/torn-chat-quick-reply
@@ -23,11 +23,15 @@
  * profile. A plain click (or a quick tap on touch) still opens that profile,
  * exactly like today - this script changes nothing about that. Holding Shift
  * while clicking the sender's name - or, with no keyboard at all on Torn PDA,
- * pressing and holding the name briefly - instead inserts "@Name " into that
- * same chat channel's message box and focuses it, so replying to someone
- * doesn't mean typing their name out by hand. A small "Replying to Name" chip
- * appears above the box so it's obvious a reply is queued up, with a x to
- * dismiss it; it also clears itself once the message is actually sent.
+ * pressing and holding the name briefly - instead inserts a mention ("↪ Name "
+ * by default, or "@Name " - see below) into that same chat channel's message
+ * box and focuses it, so replying to someone doesn't mean typing their name
+ * out by hand. A small "Replying to Name" chip appears above the box so it's
+ * obvious a reply is queued up, with a x to dismiss it; it also clears itself
+ * once the message is actually sent. The chip has its own small toggle to
+ * flip between the "↪ Name" and "@Name" styles for mentions you queue up
+ * from then on; the choice is remembered (in localStorage, nothing else is
+ * ever stored) for next time.
  *
  * It never reads anything outside the chatbox, never makes a network
  * request, and never submits or sends anything - it only ever fills in the
@@ -108,10 +112,43 @@
     return root ? root.querySelector(TEXTAREA_SELECTOR) : null;
   }
 
+  // ------------------------------------------------------------ mention style
+  const STYLE_STORAGE_KEY = 'tcqr_mention_style';
+  const DEFAULT_MENTION_STYLE = 'arrow';
+  const MENTION_GLYPH = { arrow: '↪', at: '@' };
+
+  /** Never trust a raw localStorage read - fall back to the default on
+   * anything but one of the two values this script actually writes. */
+  function getMentionStyle() {
+    let stored = null;
+    try {
+      stored = localStorage.getItem(STYLE_STORAGE_KEY);
+    } catch (err) {
+      stored = null; // private browsing, storage disabled, etc. - just use the default
+    }
+    return stored === 'arrow' || stored === 'at' ? stored : DEFAULT_MENTION_STYLE;
+  }
+
+  function setMentionStyle(style) {
+    if (style !== 'arrow' && style !== 'at') return;
+    try {
+      localStorage.setItem(STYLE_STORAGE_KEY, style);
+    } catch (err) {
+      // Storage unavailable - the choice just won't persist across reloads.
+    }
+  }
+
+  function formatMention(name) {
+    const style = getMentionStyle();
+    // "@Name " sits tight against the name (the usual @mention convention);
+    // "↪ Name " reads as its own word, so it gets a space after it.
+    return style === 'at' ? ('@' + name + ' ') : (MENTION_GLYPH[style] + ' ' + name + ' ');
+  }
+
   function insertMention(textarea, name) {
     const current = textarea.value || '';
     const needsSpace = current.length > 0 && !/\s$/.test(current);
-    const mention = (needsSpace ? ' ' : '') + '@' + name + ' ';
+    const mention = (needsSpace ? ' ' : '') + formatMention(name);
     const next = current + mention;
     setTextareaValue(textarea, next);
     textarea.focus();
@@ -152,6 +189,10 @@
       .tcqr-chip-close{background:none;border:0;cursor:pointer;font-size:12px;
         color:inherit;opacity:.65;padding:0 2px;line-height:1;font-family:inherit}
       .tcqr-chip-close:hover{opacity:1}
+      .tcqr-style-toggle{background:none;border:1px solid currentColor;border-radius:3px;
+        cursor:pointer;font-size:11px;color:inherit;opacity:.65;padding:0 4px;
+        line-height:1.6;font-family:inherit}
+      .tcqr-style-toggle:hover{opacity:1}
       .tcqr-pressed{background:rgba(110,150,255,.25);border-radius:3px}
     `;
     document.head.appendChild(style);
@@ -190,6 +231,24 @@
       chip.className = 'tcqr-chip';
       const text = document.createElement('span');
       chip.appendChild(text);
+
+      // Lets you flip between "@Name" and "↪ Name" for replies you
+      // queue up from here on - it only affects new mentions, not ones
+      // already sitting in the box, and the choice is remembered next time.
+      const styleBtn = document.createElement('button');
+      styleBtn.type = 'button';
+      styleBtn.className = 'tcqr-style-toggle';
+      styleBtn.title = 'Switch mention style for new replies (@Name / ↪ Name)';
+      styleBtn.textContent = MENTION_GLYPH[getMentionStyle()];
+      styleBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const next = getMentionStyle() === 'arrow' ? 'at' : 'arrow';
+        setMentionStyle(next);
+        styleBtn.textContent = MENTION_GLYPH[next];
+      });
+      chip.appendChild(styleBtn);
+
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
       closeBtn.className = 'tcqr-chip-close';
